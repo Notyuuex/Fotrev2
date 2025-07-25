@@ -1,0 +1,2 @@
+python-telegram-bot==20.7 # Ganti X dengan versi terbaru yang stabil, misalnya 20.7
+requests
