@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import asyncio
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -71,5 +72,5 @@ async def main():
     await app.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
