@@ -5,11 +5,6 @@ from io import BytesIO
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-import nest_asyncio
-import asyncio
-
-nest_asyncio.apply()
-
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -17,9 +12,6 @@ logging.basicConfig(
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DEEPAI_API_KEY = os.getenv('DEEPAI_API_KEY')
-
-if not BOT_TOKEN or not DEEPAI_API_KEY:
-    raise ValueError("Environment variables BOT_TOKEN dan DEEPAI_API_KEY harus diset!")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -47,7 +39,9 @@ async def upscale_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if response.status_code != 200:
-        await update.message.reply_text("Gagal memproses foto. Coba lagi nanti.")
+        await update.message.reply_text(
+            f"Gagal memproses foto.\nStatus code: {response.status_code}\nResponse: {response.text}"
+        )
         return
 
     result_url = response.json().get('output_url')
@@ -73,8 +67,9 @@ async def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(MessageHandler(filters.PHOTO, upscale_photo))
 
-    logging.info("Bot berjalan...")
+    print("Bot berjalan...")
     await app.run_polling()
 
 if __name__ == '__main__':
+    import asyncio
     asyncio.run(main())
