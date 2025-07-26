@@ -13,6 +13,11 @@ logging.basicConfig(
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DEEPAI_API_KEY = os.getenv('DEEPAI_API_KEY')
 
+if not BOT_TOKEN:
+    raise RuntimeError("Error: BOT_TOKEN environment variable is not set.")
+if not DEEPAI_API_KEY:
+    raise RuntimeError("Error: DEEPAI_API_KEY environment variable is not set.")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Halo! Kirimkan saya foto yang ingin kamu tingkatkan resolusinya (HD)."
