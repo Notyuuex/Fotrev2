@@ -4,7 +4,6 @@ import requests
 from io import BytesIO
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import asyncio
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -21,14 +20,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Kirim foto, dan saya akan membuatnya menjadi HD dengan AI."
+        "Cukup kirimkan foto ke bot ini, dan saya akan mengubahnya jadi HD dengan AI."
     )
 
 async def upscale_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
         await update.message.reply_text("Mohon kirimkan foto saja ya!")
         return
-    
+
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
     file_bytes = await file.download_as_bytearray()
@@ -49,19 +48,19 @@ async def upscale_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not result_url:
         await update.message.reply_text("API tidak mengembalikan hasil yang valid.")
         return
-    
+
     r = requests.get(result_url)
     if r.status_code != 200:
         await update.message.reply_text("Gagal mengunduh hasil foto.")
         return
 
     bio = BytesIO(r.content)
-    bio.name = "upscale.jpg"
+    bio.name = "upscaled.jpg"
     bio.seek(0)
 
-    await update.message.reply_photo(photo=InputFile(bio), caption="Foto sudah di-upscale ke HD!")
+    await update.message.reply_photo(photo=InputFile(bio), caption="Foto berhasil di-upscale ke HD!")
 
-async def main():
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -69,8 +68,7 @@ async def main():
     app.add_handler(MessageHandler(filters.PHOTO, upscale_photo))
 
     print("Bot berjalan...")
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    main()
