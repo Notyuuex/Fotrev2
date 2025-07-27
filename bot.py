@@ -3,85 +3,72 @@ import logging
 import requests
 from io import BytesIO
 from telegram import Update, InputFile
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+IMGBB_API_KEY = os.getenv("IMGBB_API_KEY")
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Kirim foto yang ingin kamu HD-kan.")
+    await update.message.reply_text("Kirimkan foto untuk saya HD-kan.")
 
-async def upscale_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.photo:
-        await update.message.reply_text("Kirimkan foto, bukan file lain.")
-        return
-
-    await update.message.reply_text("Memproses foto... Mohon tunggu.")
-
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
-    file_bytes = await file.download_as_bytearray()
-    
-    # Upload foto ke layanan file hosting sementara
-    upload = requests.post("https://api.imgbb.com/1/upload", params={
-        "key": "YOUR_IMGBB_API_KEY"
-    }, files={
-        "image": BytesIO(file_bytes)
-    })
+    byte_array = await file.download_as_bytearray()
 
-    if upload.status_code != 200:
-        await update.message.reply_text("Gagal mengupload gambar.")
-        return
-
-    image_url = upload.json()['data']['url']
-
-    # Panggil API Replicate
-    replicate_response = requests.post(
-        "https://api.replicate.com/v1/predictions",
-        headers={
-            "Authorization": f"Token {REPLICATE_API_TOKEN}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "version": "92860eaa102f3e14f24a54a1d9d99ba3cbb25b2c24d6e72a3046c2e3c5e909d3",
-            "input": {"img": image_url}
-        }
+    # Upload ke imgbb
+    imgbb_url = "https://api.imgbb.com/1/upload"
+    response = requests.post(
+        imgbb_url,
+        data={"key": IMGBB_API_KEY},
+        files={"image": BytesIO(byte_array)}
     )
+    if response.status_code != 200:
+        await update.message.reply_text("Gagal upload ke imgbb.")
+        return
+    image_url = response.json()["data"]["url"]
 
-    if replicate_response.status_code != 201:
-        await update.message.reply_text("Gagal mengirim ke API Replicate.")
+    # Kirim ke replicate
+    headers = {"Authorization": f"Token {REPLICATE_API_TOKEN}"}
+    json_data = {
+        "version": "92802090b800491b84ee126b00c38c1d5d9eff7ff69c65f059055d28d65c1f6b",
+        "input": {"img": image_url}
+    }
+
+    rep = requests.post("https://api.replicate.com/v1/predictions", json=json_data, headers=headers)
+    if rep.status_code != 201:
+        await update.message.reply_text("Gagal memproses HD (Replicate error).")
         return
 
-    prediction = replicate_response.json()
-    prediction_url = prediction["urls"]["get"]
+    prediction = rep.json()
+    status = prediction["status"]
+    get_url = prediction["urls"]["get"]
 
-    # Tunggu hasil
+    # Tunggu hasilnya selesai diproses
     import time
-    for _ in range(20):
-        time.sleep(3)
-        check = requests.get(prediction_url, headers={
-            "Authorization": f"Token {REPLICATE_API_TOKEN}"
-        })
-        result = check.json()
-        if result["status"] == "succeeded":
-            output_url = result["output"]
-            break
+    while status not in ["succeeded", "failed"]:
+        time.sleep(2)
+        poll = requests.get(get_url, headers=headers).json()
+        status = poll["status"]
+
+    if status == "succeeded":
+        output_url = poll["output"]
+        image_data = requests.get(output_url).content
+        await update.message.reply_photo(photo=InputFile(BytesIO(image_data), filename="hd.jpg"), caption="Foto HD selesai!")
     else:
-        await update.message.reply_text("Gagal memproses gambar.")
-        return
-
-    result_image = requests.get(output_url)
-    bio = BytesIO(result_image.content)
-    bio.name = "hd_photo.jpg"
-    bio.seek(0)
-
-    await update.message.reply_photo(photo=InputFile(bio), caption="Foto HD berhasil dibuat!")
+        await update.message.reply_text("Proses HD gagal.")
 
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, upscale_photo))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    print("Bot berjalan...")
     await app.run_polling()
 
 if __name__ == "__main__":
